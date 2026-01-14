@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { SensorService } from '@/lib/modules/sensors/accelerometer/accelerometer.service';
 import { isShaking } from '@/lib/core/logic/motion';
-import AnimatedDice from '@/components/molecules/AnimatedDice';
+import Dice3D from '@/components/organisms/Dice3D';
 import ScoreDisplay from '@/components/atoms/ScoreDisplay';
 import InstructionText from '@/components/atoms/InstructionText';
 
@@ -47,8 +47,8 @@ export default function Index() {
       </View>
 
       <View style={styles.diceContainer}>
-        <AnimatedDice 
-          value={currentNumber} 
+        <Dice3D 
+          value={currentNumber}
           isRolling={isRolling}
           onRollComplete={handleRollComplete}
         />
