@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { SensorService } from '@/lib/modules/sensors/accelerometer/accelerometer.service';
 import { isShaking } from '@/lib/core/logic/motion';
@@ -9,36 +9,50 @@ import InstructionText from '@/components/atoms/InstructionText';
 export default function Index() {
   const [currentNumber, setCurrentNumber] = useState(1);
   const [isRolling, setIsRolling] = useState(false);
+  const [canRoll, setCanRoll] = useState(true);
 
-  const rollDice = () => {
-    if (isRolling) return;
+  const rollDice = useCallback(() => {
+    if (!canRoll || isRolling) {
+      console.log('⛔ No se puede lanzar ahora');
+      return;
+    }
     
+    console.log('🎲 Iniciando lanzamiento...');
     setIsRolling(true);
+    setCanRoll(false);
 
-    let counter = 0;
-    const interval = setInterval(() => {
-      setCurrentNumber(Math.floor(Math.random() * 6) + 1);
-      counter++;
-      if (counter > 8) {
-        clearInterval(interval);
-        setCurrentNumber(Math.floor(Math.random() * 6) + 1);
-      }
-    }, 80);
-  };
+    // Generar número aleatorio inmediatamente
+    const newNumber = Math.floor(Math.random() * 6) + 1;
+    console.log('🎯 Número generado:', newNumber);
+    
+    // Actualizar el número después de un breve delay para sincronizar con la animación
+    setTimeout(() => {
+      setCurrentNumber(newNumber);
+    }, 600);
+  }, [canRoll, isRolling]);
 
-  const handleRollComplete = () => {
+  const handleRollComplete = useCallback(() => {
+    console.log('✅ Lanzamiento completado - deteniendo animación');
     setIsRolling(false);
-  };
+    
+    // Permitir otro lanzamiento después de un pequeño delay
+    setTimeout(() => {
+      console.log('🟢 Listo para otro lanzamiento');
+      setCanRoll(true);
+    }, 800);
+  }, []);
 
+  // Escuchar el acelerómetro
   useEffect(() => {
     const subscription = SensorService.subscribe((data) => {
-      if (isShaking(data) && !isRolling) {
+      if (isShaking(data) && canRoll && !isRolling) {
+        console.log('📱 Sacudida detectada!');
         rollDice();
       }
     });
 
     return () => SensorService.unsubscribe(subscription);
-  }, [isRolling]);
+  }, [canRoll, isRolling, rollDice]);
 
   return (
     <View style={styles.container}>
