@@ -28,86 +28,105 @@ function DiceModel({ value, isRolling, onRollComplete }: DiceModelProps) {
   const rotationVelocity = useRef({ x: 0, y: 0, z: 0 });
   const targetRotation = useRef<THREE.Euler>(new THREE.Euler(0, 0, 0));
   const isTransitioning = useRef(false);
+  const rollCompleted = useRef(false);
 
-  // Rotaciones para cada cara del dado (ajustadas para tu modelo)
+  // Rotaciones corregidas para cada cara del dado
+  // Estas rotaciones están calibradas para que el número visible coincida con el value
   const rotations: { [key: number]: [number, number, number] } = {
-    1: [0, 0, 0],                    // Cara 1 al frente
-    2: [0, Math.PI / 2, 0],          // Cara 2 (rotar 90° en Y)
-    3: [0, Math.PI, 0],              // Cara 3 (rotar 180° en Y)
-    4: [0, -Math.PI / 2, 0],         // Cara 4 (rotar -90° en Y)
-    5: [Math.PI / 2, 0, 0],          // Cara 5 (rotar 90° en X)
-    6: [-Math.PI / 2, 0, 0],         // Cara 6 (rotar -90° en X)
+    1: [0, 0, 0],                           // Cara 1 frontal
+    6: [Math.PI, 0, 0],                     // Cara 6 opuesta a 1
+    2: [0, -Math.PI / 2, 0],                // Cara 2 derecha
+    5: [0, Math.PI / 2, 0],                 // Cara 5 izquierda
+    3: [Math.PI / 2, 0, 0],                 // Cara 3 arriba
+    4: [-Math.PI / 2, 0, 0],                // Cara 4 abajo
   };
 
-  // Inicializar el modelo
+  // Inicializar el modelo SOLO UNA VEZ
   useEffect(() => {
-    if (gltf?.scene && groupRef.current) {
-      // Centrar el modelo
+    if (gltf?.scene && groupRef.current && !groupRef.current.userData.initialized) {
+      // Centrar el modelo en el origen
       const box = new THREE.Box3().setFromObject(gltf.scene);
       const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      
+      // Centrar exactamente en el origen para rotación correcta
       gltf.scene.position.set(-center.x, -center.y, -center.z);
       
-      // Escalar - MÁS PEQUEÑO para que se vea mejor
-      const size = box.getSize(new THREE.Vector3());
+      // Escalar apropiadamente - no muy grande
       const maxDim = Math.max(size.x, size.y, size.z);
-      const scale = 1.8 / maxDim; // Reducido de 2.5 a 1.8
+      const scale = 2.2 / maxDim;
       groupRef.current.scale.setScalar(scale);
       
-      console.log('✅ Modelo cargado y configurado');
-      console.log('📏 Tamaño:', size);
-      console.log('🔍 Escala:', scale);
+      // Posición inicial del dado (cara 1 visible)
+      groupRef.current.rotation.set(0, 0, 0);
+      
+      // Marcar como inicializado
+      groupRef.current.userData.initialized = true;
+      
+      console.log('✅ Dado inicializado correctamente');
+      console.log('📏 Dimensiones:', size);
+      console.log('🎯 Centro:', center);
+      console.log('🔍 Escala aplicada:', scale);
     }
   }, [gltf]);
 
-  // Manejar el cambio de valor
+  // Manejar inicio del lanzamiento
   useEffect(() => {
-    if (!isRolling && groupRef.current) {
+    if (isRolling && groupRef.current) {
+      rollCompleted.current = false;
+      
+      // Velocidad de rotación aleatoria fuerte
+      rotationVelocity.current = {
+        x: (Math.random() - 0.5) * 0.6,
+        y: (Math.random() - 0.5) * 0.6,
+        z: (Math.random() - 0.5) * 0.6,
+      };
+      
+      console.log('🎲 Iniciando lanzamiento con velocidad:', rotationVelocity.current);
+    }
+  }, [isRolling]);
+
+  // Manejar cambio de valor (después del lanzamiento)
+  useEffect(() => {
+    if (!isRolling && groupRef.current && !rollCompleted.current) {
       const [x, y, z] = rotations[value];
       targetRotation.current = new THREE.Euler(x, y, z);
       isTransitioning.current = true;
+      rollCompleted.current = true;
+      
+      console.log(`🎯 Transicionando a cara ${value}:`, { x, y, z });
     }
   }, [value, isRolling]);
-
-  // Manejar finalización del lanzamiento
-  useEffect(() => {
-    if (isRolling && groupRef.current) {
-      // Iniciar velocidad de rotación aleatoria
-      rotationVelocity.current = {
-        x: (Math.random() - 0.5) * 0.4,
-        y: (Math.random() - 0.5) * 0.4,
-        z: (Math.random() - 0.5) * 0.4,
-      };
-      
-      // Llamar onRollComplete después de que termine la animación
-      const timer = setTimeout(() => {
-        console.log('⏱️ Timer completado, llamando onRollComplete');
-        if (onRollComplete) {
-          onRollComplete();
-        }
-      }, 1500); // 1.5 segundos de animación
-      
-      return () => clearTimeout(timer);
-    }
-  }, [isRolling, onRollComplete]);
 
   // Animación de cada frame
   useFrame((state, delta) => {
     if (!groupRef.current) return;
 
     if (isRolling) {
-      // Rotación rápida mientras se lanza
+      // Rotación rápida mientras se lanza - ALREDEDOR DEL CENTRO
       groupRef.current.rotation.x += rotationVelocity.current.x;
       groupRef.current.rotation.y += rotationVelocity.current.y;
       groupRef.current.rotation.z += rotationVelocity.current.z;
       
       // Reducir velocidad gradualmente
-      rotationVelocity.current.x *= 0.98;
-      rotationVelocity.current.y *= 0.98;
-      rotationVelocity.current.z *= 0.98;
+      rotationVelocity.current.x *= 0.97;
+      rotationVelocity.current.y *= 0.97;
+      rotationVelocity.current.z *= 0.97;
+      
+      // Llamar onRollComplete cuando la velocidad sea muy baja
+      const totalVelocity = Math.abs(rotationVelocity.current.x) + 
+                           Math.abs(rotationVelocity.current.y) + 
+                           Math.abs(rotationVelocity.current.z);
+      
+      if (totalVelocity < 0.05 && onRollComplete) {
+        console.log('⏱️ Velocidad baja, finalizando lanzamiento');
+        onRollComplete();
+      }
     } else if (isTransitioning.current) {
       // Transición suave a la rotación objetivo
-      const lerpFactor = 0.15;
+      const lerpFactor = 0.12;
       
+      // Interpolar cada eje de rotación
       groupRef.current.rotation.x = THREE.MathUtils.lerp(
         groupRef.current.rotation.x,
         targetRotation.current.x,
@@ -130,12 +149,14 @@ function DiceModel({ value, isRolling, onRollComplete }: DiceModelProps) {
       const diffZ = Math.abs(groupRef.current.rotation.z - targetRotation.current.z);
       
       if (diffX < 0.01 && diffY < 0.01 && diffZ < 0.01) {
+        // Forzar rotación exacta
         groupRef.current.rotation.set(
           targetRotation.current.x,
           targetRotation.current.y,
           targetRotation.current.z
         );
         isTransitioning.current = false;
+        console.log('✅ Transición completada');
       }
     }
   });
@@ -146,7 +167,7 @@ function DiceModel({ value, isRolling, onRollComplete }: DiceModelProps) {
   }
 
   return (
-    <group ref={groupRef}>
+    <group ref={groupRef} position={[0, 0, 0]}>
       <primitive object={gltf.scene} />
     </group>
   );
@@ -175,8 +196,8 @@ export default function Dice3D({ value, isRolling, onRollComplete }: Dice3DProps
     <View style={styles.container}>
       <Canvas
         camera={{ 
-          position: [0, 0, 10], // Aumentado de 7 a 10 para alejar más
-          fov: 45, // Reducido de 50 a 45 para menos distorsión
+          position: [0, 0, 8],      // Distancia óptima
+          fov: 50,                   // Campo de visión balanceado
           near: 0.1,
           far: 100
         }}
@@ -185,11 +206,11 @@ export default function Dice3D({ value, isRolling, onRollComplete }: Dice3DProps
           alpha: true,
         }}
       >
-        {/* Iluminación mejorada */}
-        <ambientLight intensity={0.8} />
-        <directionalLight position={[5, 5, 5]} intensity={1.5} castShadow />
-        <directionalLight position={[-5, -5, -5]} intensity={0.5} />
-        <pointLight position={[0, 0, 5]} intensity={0.8} />
+        {/* Iluminación optimizada para ver bien el dado */}
+        <ambientLight intensity={0.6} />
+        <directionalLight position={[5, 5, 5]} intensity={1.2} castShadow />
+        <directionalLight position={[-3, -3, 3]} intensity={0.4} />
+        <pointLight position={[0, 0, 5]} intensity={0.6} />
         
         <Suspense fallback={<LoadingFallback />}>
           <DiceModel 
